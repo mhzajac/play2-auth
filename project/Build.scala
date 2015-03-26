@@ -9,19 +9,15 @@ object ApplicationBuild extends Build {
   val playVersion = play.core.PlayVersion.current
 
   lazy val baseSettings = Seq(
-    version            := "0.13.2",
-    scalaVersion       := "2.10.4",
-    crossScalaVersions := Seq("2.10.4", "2.11.1"),
+    version            := "0.13.3-SNAPSHOT",
+    scalaVersion       := "2.11.6",
+    crossScalaVersions := Seq("2.10.5", "2.11.6"),
     organization       := "jp.t2v",
-    resolvers += "Typesafe repository" at "http://repo.typesafe.com/typesafe/releases/",
-    resolvers ++= {
-      if (isSnapshot.value) {
-        Seq("Sonatype Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots")
-      } else {
-        Nil
-      }
-    },
-    resolvers += "Sonatype Releases"  at "https://oss.sonatype.org/content/repositories/releases"
+    resolvers          ++=
+      Resolver.typesafeRepo("releases") ::
+      Resolver.sonatypeRepo("releases") ::
+      Nil,
+    scalacOptions      ++= Seq("-language:_", "-deprecation")
   )
 
   lazy val appPublishMavenStyle = true
@@ -58,12 +54,12 @@ object ApplicationBuild extends Build {
 
 
   lazy val core = Project("core", base = file("module"))
-    .settings(baseSettings: _*)
     .settings(
-      libraryDependencies += "com.typesafe.play"  %%   "play"                   % playVersion        % "provided",
-      libraryDependencies += play.PlayImport.cache,
-      libraryDependencies += "jp.t2v"             %%   "stackable-controller"   % "0.4.1",
+      baseSettings,
       name                    := appName,
+      libraryDependencies     += "com.typesafe.play"  %%   "play"                   % playVersion        % "provided",
+      libraryDependencies     += play.PlayImport.cache,
+      libraryDependencies     += "jp.t2v"             %%   "stackable-controller"   % "0.4.1",
       publishMavenStyle       := appPublishMavenStyle,
       publishArtifact in Test := appPublishArtifactInTest,
       pomIncludeRepository    := appPomIncludeRepository,
@@ -72,8 +68,8 @@ object ApplicationBuild extends Build {
     )
 
   lazy val test = Project("test", base = file("test"))
-    .settings(baseSettings: _*)
     .settings(
+      baseSettings,
       libraryDependencies += "com.typesafe.play"  %% "play-test"   % playVersion,
       name                    := appName + "-test",
       publishMavenStyle       := appPublishMavenStyle,
@@ -85,8 +81,8 @@ object ApplicationBuild extends Build {
 
   lazy val sample = Project("sample", file("sample"))
     .enablePlugins(play.PlayScala)
-    .settings(baseSettings: _*)
     .settings(
+      baseSettings,
       libraryDependencies += play.Play.autoImport.jdbc,
       libraryDependencies += "org.mindrot"           % "jbcrypt"                           % "0.3m",
       libraryDependencies += "org.scalikejdbc"      %% "scalikejdbc"                       % "2.2.3",
@@ -103,6 +99,34 @@ object ApplicationBuild extends Build {
       pomExtra          := appPomExtra
     )
     .dependsOn(core, test % "test")
+
+  lazy val social = Project (id = "social", base = file ("social"))
+    .settings(
+      baseSettings,
+      name                := appName + "-social",
+      libraryDependencies += "com.typesafe.play" %% "play"       % playVersion % "provided",
+      libraryDependencies += "com.typesafe.play" %% "play-ws"    % playVersion % "provided",
+      libraryDependencies += "com.typesafe.play" %% "play-cache" % playVersion % "provided"
+  ).dependsOn(core)
+
+// TODO: Play2.3
+//  lazy val playapp = Project("social-sample", file("social-sample"))
+//    .enablePlugins(play.PlayScala)
+//    .settings(
+//      baseSettings,
+//      resourceDirectories in Test += baseDirectory.value / "conf",
+//      resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
+//      libraryDependencies ++= Seq(
+//        "com.typesafe.play" %% "play"                         % playVersion,
+//        "com.typesafe.play" %% "play-ws"                      % playVersion,
+//        "com.typesafe.play" %% "play-cache"                   % playVersion,
+//        "org.scalikejdbc"   %% "scalikejdbc-play-initializer" % "2.4.0-M2-20141215",
+//        "org.flywaydb"      %% "flyway-play"                  % "2.0.0-SNAPSHOT",
+//        "postgresql"         % "postgresql"                   % "9.1-901.jdbc4"
+//      )
+//    )
+//    .dependsOn(core, social)
+
 
   lazy val root = Project("root", base = file("."))
     .settings(baseSettings: _*)
