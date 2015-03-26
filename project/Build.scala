@@ -109,23 +109,25 @@ object ApplicationBuild extends Build {
       libraryDependencies += "com.typesafe.play" %% "play-cache" % playVersion % "provided"
   ).dependsOn(core)
 
-// TODO: Play2.3
-//  lazy val playapp = Project("social-sample", file("social-sample"))
-//    .enablePlugins(play.PlayScala)
-//    .settings(
-//      baseSettings,
-//      resourceDirectories in Test += baseDirectory.value / "conf",
-//      resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
-//      libraryDependencies ++= Seq(
-//        "com.typesafe.play" %% "play"                         % playVersion,
-//        "com.typesafe.play" %% "play-ws"                      % playVersion,
-//        "com.typesafe.play" %% "play-cache"                   % playVersion,
-//        "org.scalikejdbc"   %% "scalikejdbc-play-initializer" % "2.4.0-M2-20141215",
-//        "org.flywaydb"      %% "flyway-play"                  % "2.0.0-SNAPSHOT",
-//        "postgresql"         % "postgresql"                   % "9.1-901.jdbc4"
-//      )
-//    )
-//    .dependsOn(core, social)
+  lazy val socialSample = Project("social-sample", file("social-sample"))
+    .enablePlugins(play.PlayScala)
+    .settings(
+      baseSettings,
+      resourceDirectories in Test += baseDirectory.value / "conf",
+      resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
+      libraryDependencies ++= Seq(
+        "com.typesafe.play" %% "play-ws"                           % playVersion,
+        "com.typesafe.play" %% "play-cache"                        % playVersion,
+//        "org.scalikejdbc"   %% "scalikejdbc-play-initializer"      % "2.4.0-M2-20141215",
+//        "org.flywaydb"      %% "flyway-play"                       % "2.0.0-SNAPSHOT",
+        "org.scalikejdbc"   %% "scalikejdbc"                       % "2.2.3",
+        "org.scalikejdbc"   %% "scalikejdbc-config"                % "2.2.3",
+        "org.scalikejdbc"   %% "scalikejdbc-syntax-support-macro"  % "2.2.3",
+        "org.scalikejdbc"   %% "scalikejdbc-test"                  % "2.2.3"            % "test",
+        "org.scalikejdbc"   %% "scalikejdbc-play-plugin"           % "2.3.5"
+      )
+    )
+    .dependsOn(core, social)
 
 
   lazy val root = Project("root", base = file("."))
@@ -136,6 +138,6 @@ object ApplicationBuild extends Build {
       packagedArtifacts := Map.empty,
       publishTo         <<=(version)(appPublishTo),
       pomExtra          := appPomExtra
-    ).aggregate(core, test, sample)
+    ).aggregate(core, test, sample, social, socialSample)
 
 }
