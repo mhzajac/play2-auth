@@ -1,9 +1,11 @@
 package jp.t2v.lab.play2.auth
 
 import play.api.mvc.{Result, RequestHeader}
-import play.api.libs.Crypto
+import play.api.libs.crypto.CookieSigner
 
 trait TokenAccessor {
+
+  def signer: CookieSigner
 
   def extract(request: RequestHeader): Option[AuthenticityToken]
 
@@ -13,10 +15,10 @@ trait TokenAccessor {
 
   protected def verifyHmac(token: SignedToken): Option[AuthenticityToken] = {
     val (hmac, value) = token.splitAt(40)
-    if (safeEquals(Crypto.sign(value), hmac)) Some(value) else None
+    if (safeEquals(signer.sign(value), hmac)) Some(value) else None
   }
 
-  protected def sign(token: AuthenticityToken): SignedToken = Crypto.sign(token) + token
+  protected def sign(token: AuthenticityToken): SignedToken = signer.sign(token) + token
 
   // Do not change this unless you understand the security issues behind timing attacks.
   // This method intentionally runs in constant time if the two strings have the same length.

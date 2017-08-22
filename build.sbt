@@ -4,12 +4,13 @@ val appName = "play2-auth"
 val playVersion = play.core.PlayVersion.current
 
 lazy val baseSettings = Seq(
-  version := "0.14.2",
-  scalaVersion := "2.11.8",
+  version := "0.15.0-SNAPSHOT",
+  scalaVersion := "2.12.3",
   crossScalaVersions := Seq("2.10.5", "2.11.8"),
   organization := "jp.t2v",
   resolvers ++= Seq(
     Resolver.typesafeRepo("releases"),
+    Resolver.sonatypeRepo("snapshots"),
     Resolver.sonatypeRepo("releases")
   ),
   scalacOptions ++= Seq("-language:_", "-deprecation"),
@@ -55,7 +56,7 @@ lazy val core = (project in file("module"))
     baseSettings,
     libraryDependencies += "com.typesafe.play" %% "play" % playVersion % "provided",
     libraryDependencies += "com.typesafe.play" %% "play-cache" % playVersion % "provided",
-    libraryDependencies += "jp.t2v" %% "stackable-controller" % "0.5.1",
+    libraryDependencies += "com.jaroop" %% "stackable-controller" % "0.7.0-SNAPSHOT",
     name := appName
   )
 
@@ -96,6 +97,18 @@ lazy val sample = (project in file("sample"))
     packagedArtifacts := Map.empty
   )
   .dependsOn(core, test % "test")
+
+lazy val examples = (project in file("examples"))
+  .enablePlugins(play.sbt.PlayScala)
+  .settings(
+    baseSettings,
+    libraryDependencies ++= Seq(
+      jdbc,
+      cache,
+      ws
+    )
+  )
+  .dependsOn(core)
 
 lazy val social = (project in file("social"))
   .settings(

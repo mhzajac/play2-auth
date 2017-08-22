@@ -9,7 +9,7 @@ package object auth {
 
   type ResultUpdater = Result => Result
 
-  @deprecated("renamed to TransparentIdContainer", since = "0.13.1")
-  type CookieIdContainer[Id] = TransparentIdContainer[Id]
+  // @deprecated("renamed to TransparentIdContainer", since = "0.13.1")
+  // type CookieIdContainer[Id] = TransparentIdContainer[Id]
 
 }

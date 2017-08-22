@@ -1,13 +1,20 @@
 package jp.t2v.lab.play2.auth
 
-import play.api.cache.Cache
-import play.api.Play._
+import java.security.SecureRandom
+import javax.inject.Inject
+import play.api.cache.SyncCacheApi
 import scala.annotation.tailrec
 import scala.util.Random
-import java.security.SecureRandom
 import scala.reflect.ClassTag
+import scala.concurrent.duration._
 
-class CacheIdContainer[Id: ClassTag] extends IdContainer[Id] {
+trait IdType[A] {
+  implicit val ct: ClassTag[A]
+}
+
+class CacheIdContainer[Id] @Inject() (cache: SyncCacheApi)(implicit ev: IdType[Id]) extends IdContainer[Id] {
+
+  implicit val ct = ev.ct
 
   private[auth] val tokenSuffix = ":token"
   private[auth] val userIdSuffix = ":userId"
@@ -27,31 +34,31 @@ class CacheIdContainer[Id: ClassTag] extends IdContainer[Id] {
     if (get(token).isDefined) generate else token
   }
 
-  private[auth] def removeByUserId(userId: Id) {
-    Cache.getAs[String](userId.toString + userIdSuffix) foreach unsetToken
+  private[auth] def removeByUserId(userId: Id): Unit = {
+    cache.get[String](userId.toString + userIdSuffix) foreach unsetToken
     unsetUserId(userId)
   }
 
-  def remove(token: AuthenticityToken) {
+  def remove(token: AuthenticityToken): Unit = {
     get(token) foreach unsetUserId
     unsetToken(token)
   }
 
-  private[auth] def unsetToken(token: AuthenticityToken) {
-    Cache.remove(token + tokenSuffix)
+  private[auth] def unsetToken(token: AuthenticityToken): Unit = {
+    cache.remove(token + tokenSuffix)
   }
-  private[auth] def unsetUserId(userId: Id) {
-    Cache.remove(userId.toString + userIdSuffix)
-  }
-
-  def get(token: AuthenticityToken) = Cache.get(token + tokenSuffix).map(_.asInstanceOf[Id])
-
-  private[auth] def store(token: AuthenticityToken, userId: Id, timeoutInSeconds: Int) {
-    Cache.set(token + tokenSuffix, userId, timeoutInSeconds)
-    Cache.set(userId.toString + userIdSuffix, token, timeoutInSeconds)
+  private[auth] def unsetUserId(userId: Id): Unit = {
+    cache.remove(userId.toString + userIdSuffix)
   }
 
-  def prolongTimeout(token: AuthenticityToken, timeoutInSeconds: Int) {
+  def get(token: AuthenticityToken): Option[Id] = cache.get(token + tokenSuffix)
+
+  private[auth] def store(token: AuthenticityToken, userId: Id, timeoutInSeconds: Int): Unit = {
+    cache.set(token + tokenSuffix, userId, timeoutInSeconds.seconds)
+    cache.set(userId.toString + userIdSuffix, token, timeoutInSeconds.seconds)
+  }
+
+  def prolongTimeout(token: AuthenticityToken, timeoutInSeconds: Int): Unit = {
     get(token).foreach(store(token, _, timeoutInSeconds))
   }
 

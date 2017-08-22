@@ -1,68 +1,80 @@
 package jp.t2v.lab.play2.auth
 
-import play.api.mvc.{Result, Controller}
-import jp.t2v.lab.play2.stackc.{RequestWithAttributes, RequestAttributeKey, StackableController}
-import scala.concurrent.Future
+import javax.inject._
+import play.api.mvc._
+import com.jaroop.play.stackc.{RequestWithAttributes, RequestAttributeKey, StackableController}
+import scala.concurrent.{ ExecutionContext, Future }
+import scala.reflect._
 
-trait AuthElement extends StackableController with AsyncAuth {
-    self: Controller with AuthConfig =>
+trait Env {
 
-  private[auth] case object AuthKey extends RequestAttributeKey[User]
-  case object AuthorityKey extends RequestAttributeKey[Authority]
+    type Id
 
-  override def proceed[A](req: RequestWithAttributes[A])(f: RequestWithAttributes[A] => Future[Result]): Future[Result] = {
-    implicit val (r, ctx) = (req, StackActionExecutionContext(req))
-    req.get(AuthorityKey) map { authority =>
-      authorized(authority) flatMap {
-        case Right((user, resultUpdater)) => super.proceed(req.set(AuthKey, user))(f).map(resultUpdater)
-        case Left(result)                 => Future.successful(result)
-      }
-    } getOrElse {
-      restoreUser collect {
-        case (Some(user), _) => user
-      } flatMap {
-        authorizationFailed(req, _, None)
-      } recoverWith {
-        case _ => authenticationFailed(req)
-      }
-    }
-  }
+    type User
 
-  implicit def loggedIn(implicit req: RequestWithAttributes[_]): User = req.get(AuthKey).get
+    type Authority
 
 }
 
-trait OptionalAuthElement extends StackableController with AsyncAuth {
-    self: Controller with AuthConfig =>
+class OptionalAuthRequest[A, User](request: Request[A], val user: Option[User]) extends WrappedRequest[A](request)
 
-  private[auth] case object AuthKey extends RequestAttributeKey[User]
+@Singleton
+class OptionalAuthenticatedActionBuilder[E <: Env] @Inject() (
+  val parser: BodyParsers.Default,
+  val config: AuthConfig[E],
+  val idContainer: IdContainer[E#Id],
+  val tokenAccessor: TokenAccessor
+)(implicit val executionContext: ExecutionContext) extends ActionBuilder[({type L[X] = OptionalAuthRequest[X, E#User]})#L, AnyContent]
+    with AsyncAuth[E] {
 
-  override def proceed[A](req: RequestWithAttributes[A])(f: RequestWithAttributes[A] => Future[Result]): Future[Result] = {
-    implicit val (r, ctx) = (req, StackActionExecutionContext(req))
+  val asyncIdContainer = AsyncIdContainer(idContainer)
+
+  override def invokeBlock[A](request: Request[A], block: OptionalAuthRequest[A, E#User] => Future[Result]) = {
+    implicit val r = request
     val maybeUserFuture = restoreUser.recover { case _ => None -> identity[Result] _ }
     maybeUserFuture.flatMap { case (maybeUser, cookieUpdater) =>
-      super.proceed(maybeUser.map(u => req.set(AuthKey, u)).getOrElse(req))(f).map(cookieUpdater)
+      block(new OptionalAuthRequest(request, maybeUser)).map(cookieUpdater)
+    }
+  }
+}
+
+class AuthRequest[A, User](request: Request[A], val user: User) extends WrappedRequest[A](request)
+
+@Singleton
+class AuthenticatedActionBuilder[E <: Env] @Inject() (
+  val parser: BodyParsers.Default,
+  val config: AuthConfig[E],
+  val idContainer: IdContainer[E#Id],
+  val tokenAccessor: TokenAccessor
+)(implicit val executionContext: ExecutionContext) extends ActionBuilder[({type L[X] = AuthRequest[X, E#User]})#L, AnyContent]
+    with AsyncAuth[E] { self =>
+
+  val asyncIdContainer = AsyncIdContainer(idContainer)
+
+  final def withAuthorization(authority: E#Authority): ActionBuilder[({type L[X] = AuthRequest[X, E#User]})#L, AnyContent] = new ActionBuilder[({type L[X] = AuthRequest[X, E#User]})#L, AnyContent] {
+    override def parser = self.parser
+    override protected implicit def executionContext = self.executionContext
+    override protected def composeParser[A](bodyParser: BodyParser[A]): BodyParser[A] = self.composeParser(bodyParser)
+    override protected def composeAction[A](action: Action[A]): Action[A] = self.composeAction(action)
+
+    override def invokeBlock[A](request: Request[A], block: AuthRequest[A, E#User] => Future[Result]) = {
+      implicit val r = request
+      authorized(authority) flatMap {
+        case Right((user, resultUpdater)) => block(new AuthRequest(request, user)).map(resultUpdater)
+        case Left(result) => Future.successful(result)
+      }
     }
   }
 
-  implicit def loggedIn[A](implicit req: RequestWithAttributes[A]): Option[User] = req.get(AuthKey)
-}
+  override def invokeBlock[A](request: Request[A], block: AuthRequest[A, E#User] => Future[Result]) = {
+    implicit val r = request
 
-trait AuthenticationElement extends StackableController with AsyncAuth {
-    self: Controller with AuthConfig =>
-
-  private[auth] case object AuthKey extends RequestAttributeKey[User]
-
-  override def proceed[A](req: RequestWithAttributes[A])(f: RequestWithAttributes[A] => Future[Result]): Future[Result] = {
-    implicit val (r, ctx) = (req, StackActionExecutionContext(req))
     restoreUser recover {
       case _ => None -> identity[Result] _
     } flatMap {
-      case (Some(u), cookieUpdater) => super.proceed(req.set(AuthKey, u))(f).map(cookieUpdater)
-      case (None, _)                => authenticationFailed(req)
+      case (Some(user), cookieUpdater) => block(new AuthRequest(request, user)).map(cookieUpdater)
+      case (None, _) => config.authenticationFailed(request)
     }
   }
-
-  implicit def loggedIn(implicit req: RequestWithAttributes[_]): User = req.get(AuthKey).get
 
 }
